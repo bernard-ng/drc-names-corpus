@@ -1,0 +1,43 @@
+[project]
+name = "drc-names-corpus"
+version = "1.0.0"
+description = "The CongoNames Corpus: A Large-Scale Dataset of Congolese Personal Names with Gender and Ethnic Annotations"
+readme = "README.md"
+authors = [
+    { name = "bernard-ng", email = "ngandubernard@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "httpx>=0.28.1",
+    "polars>=1.37.1",
+    "pypdf2>=3.0.1",
+    "tqdm>=4.67.1",
+    "typer>=0.21.1",
+]
+
+[project.scripts]
+drc-names-corpus = "drc_names_corpus:main"
+
+[build-system]
+requires = ["uv_build>=0.8.12,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.2",
+    "pyright>=1.1.408",
+    "ruff>=0.14.13",
+]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+reportMissingModuleSource = "none"
+
+[tool.ruff]
+extend-exclude = [
+    "**/*.ipynb",
+]
