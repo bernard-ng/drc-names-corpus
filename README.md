@@ -1,4 +1,4 @@
-# The CongoNames Corpus: A Large-Scale Dataset of Congolese Personal Names with Gender and Regional Annotations
+# The CongoNames Corpus: A Large-Scale Dataset of Congolese Personal Names with Gender and Regional Provenance
 
 [![audit](https://github.com/bernard-ng/drc-names-corpus/actions/workflows/audit.yml/badge.svg)](https://github.com/bernard-ng/drc-names-corpus/actions/workflows/audit.yml)
 [![quality](https://github.com/bernard-ng/drc-names-corpus/actions/workflows/quality.yml/badge.svg)](https://github.com/bernard-ng/drc-names-corpus/actions/workflows/quality.yml)
