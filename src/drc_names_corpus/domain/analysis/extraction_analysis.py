@@ -22,16 +22,25 @@ class ExtractionAnalysis:
         self.target_dir = get_report_path("extraction_analysis")
         self.region_mapper = RegionMapper()
 
+    @staticmethod
+    def _read_csv_lower(path: Path) -> pl.DataFrame:
+        frame = pl.read_csv(path, schema_overrides={"year": pl.Utf8}).with_columns(
+            pl.col(pl.Utf8).str.to_lowercase()
+        )
+        if "year" in frame.columns:
+            frame = frame.with_columns(pl.col("year").cast(pl.Int64, strict=False))
+        return frame
+
     def export_error_rate(self) -> Path:
         assert_file_exists(self.statistics_path)
         assert_file_exists(self.names_path)
         logger.info("Writing extraction_error_rate.csv")
 
-        statistics = pl.read_csv(self.statistics_path).with_columns(
-            pl.col(pl.Utf8).str.to_lowercase()
+        statistics = self._read_csv_lower(self.statistics_path).filter(
+            pl.col("year").is_not_null()
         )
-        names = pl.read_csv(self.names_path).with_columns(
-            pl.col(pl.Utf8).str.to_lowercase()
+        names = self._read_csv_lower(self.names_path).filter(
+            pl.col("year").is_not_null()
         )
 
         expected = statistics.group_by("year").agg(
@@ -65,9 +74,7 @@ class ExtractionAnalysis:
         assert_file_exists(source_path)
 
         logger.info("Writing names_by_file.csv")
-        frame = pl.read_csv(source_path).with_columns(
-            pl.col(pl.Utf8).str.to_lowercase()
-        )
+        frame = self._read_csv_lower(source_path)
         if "name_clean" not in frame.columns:
             frame = frame.with_columns(
                 pl.col("name")

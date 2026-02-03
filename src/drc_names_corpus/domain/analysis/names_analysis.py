@@ -3,11 +3,16 @@ from __future__ import annotations
 import csv
 import logging
 import math
+import os
+import subprocess
+import sys
+import unicodedata
 from collections import Counter
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, cast
 
 import polars as pl
+from scipy.stats import entropy
 
 from drc_names_corpus.core import assert_file_exists, get_dataset_path, get_report_path
 from drc_names_corpus.domain.mappers.region_mapper import RegionMapper
@@ -19,7 +24,9 @@ NON_ALPHA_THRESHOLD = 0.3
 NAME_TOO_SHORT = 3
 NAME_TOO_LONG = 50
 FILENAME_REGION_PATTERN = r"^palmares-\d{4}-(.*)\.txt$"
-PARTICLE_PATTERN = r"(?<!\S)[A-Za-zÀ-ÿ]{1,3}(?!\S)"
+PARTICLE_PATTERN = r"\p{L}+\s+(?:wa|ka|ba|la)\s+\p{L}+"
+REGION_OVERLAP_ENV = "DRC_NAMES_CORPUS_REGION_OVERLAP_CHILD"
+ISOLATE_STEPS_ENV = "DRC_NAMES_CORPUS_ISOLATE_STEPS"
 
 
 def _percentile(values: Iterable[int], p: float) -> float | None:
@@ -32,6 +39,14 @@ def _percentile(values: Iterable[int], p: float) -> float | None:
     if f == c:
         return float(items[int(k)])
     return items[f] + (items[c] - items[f]) * (k - f)
+
+
+def _collect_streaming(frame: pl.LazyFrame) -> pl.DataFrame:
+    return cast(pl.DataFrame, frame.collect(streaming=True))  # type: ignore[call-arg]
+
+
+def _collect_scalar_int(frame: pl.LazyFrame) -> int:
+    return int(cast(int, _collect_streaming(frame).item()))
 
 
 class NamesAnalysis:
@@ -127,11 +142,39 @@ class NamesAnalysis:
             ("region_overlap.csv", self._export_regional_distinctiveness),
             ("data_quality_*.csv", self._export_data_quality),
         ]
-        outputs: list[Path] = []
+        outputs: list[Path | None] = []
+        isolate_steps = os.environ.get(ISOLATE_STEPS_ENV, "1") != "0"
         for label, action in steps:
             logger.info("Writing %s", label)
-            outputs.append(action())
+            if isolate_steps:
+                self._run_step_in_subprocess(action.__name__)
+                outputs.append(self._expected_output_path(label))
+            else:
+                outputs.append(action())
+            logger.info("Completed %s", label)
         return [path for path in outputs if path is not None]
+
+    def _run_step_in_subprocess(self, method_name: str) -> None:
+        env = os.environ.copy()
+        env[REGION_OVERLAP_ENV] = "1"
+        env[ISOLATE_STEPS_ENV] = "0"
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from drc_names_corpus.domain.analysis.names_analysis "
+                    f"import NamesAnalysis; NamesAnalysis().{method_name}()"
+                ),
+            ],
+            check=True,
+            env=env,
+        )
+
+    def _expected_output_path(self, label: str) -> Path | None:
+        if "*" in label:
+            return None
+        return self.target_dir / label
 
     def _export_overview(self) -> Path:
         frame = self._with_province(self._with_name_norm(self._base_scan()))
@@ -222,11 +265,10 @@ class NamesAnalysis:
         return output_path
 
     def _export_long_tail(self) -> Path:
-        counts = (
+        counts = _collect_streaming(
             self._base_scan()
             .group_by("name_clean")
             .agg(pl.len().alias("count"))
-            .collect()
         )
         singletons = counts.filter(pl.col("count") == 1).height
         total_unique = counts.height
@@ -243,7 +285,7 @@ class NamesAnalysis:
         )
         overview.write_csv(self.target_dir / "long_tail_overall.csv")
 
-        by_year = (
+        by_year = _collect_streaming(
             self._base_scan()
             .group_by(["year", "name_clean"])
             .agg(pl.len().alias("count"))
@@ -258,11 +300,10 @@ class NamesAnalysis:
                 (pl.col("singletons") / pl.col("unique_names")).alias("singleton_share")
             )
             .sort("year")
-            .collect()
         )
         by_year.write_csv(self.target_dir / "long_tail_by_year.csv")
 
-        by_province = (
+        by_province = _collect_streaming(
             self._with_province(self._base_scan())
             .group_by(["province", "name_clean"])
             .agg(pl.len().alias("count"))
@@ -277,55 +318,64 @@ class NamesAnalysis:
                 (pl.col("singletons") / pl.col("unique_names")).alias("singleton_share")
             )
             .sort("province")
-            .collect()
         )
         output_path = self.target_dir / "long_tail_by_province.csv"
         by_province.write_csv(output_path)
         return output_path
 
     def _export_diversity(self) -> Path:
-        counts = (
+        counts = _collect_streaming(
             self._base_scan()
             .group_by(["year", "name_clean"])
             .agg(pl.len().alias("count"))
             .with_columns(
                 (pl.col("count") / pl.col("count").sum().over("year")).alias("p")
             )
+            .select(["year", "p"])
         )
-        diversity_year = (
-            counts.group_by("year")
-            .agg(
-                [
-                    (-1 * (pl.col("p") * pl.col("p").log()).sum()).alias("shannon"),
-                    (1 - (pl.col("p") ** 2).sum()).alias("simpson"),
-                ]
+        grouped_year = counts.group_by("year").agg(pl.col("p").alias("p")).sort("year")
+        rows_year: list[dict[str, float | int]] = []
+        for row in grouped_year.iter_rows(named=True):
+            probs = [float(value) for value in row["p"] if value is not None]
+            shannon = float(entropy(probs)) if probs else 0.0
+            simpson = 1.0 - sum(value * value for value in probs)
+            rows_year.append(
+                {
+                    "year": row["year"],
+                    "shannon": shannon,
+                    "simpson": simpson,
+                    "effective_names": math.exp(shannon) if probs else 0.0,
+                }
             )
-            .with_columns(pl.col("shannon").exp().alias("effective_names"))
-            .sort("year")
-            .collect()
-        )
+        diversity_year = pl.DataFrame(rows_year)
         diversity_year.write_csv(self.target_dir / "diversity_by_year.csv")
 
-        counts = (
+        counts = _collect_streaming(
             self._with_province(self._base_scan())
             .group_by(["province", "name_clean"])
             .agg(pl.len().alias("count"))
             .with_columns(
                 (pl.col("count") / pl.col("count").sum().over("province")).alias("p")
             )
+            .select(["province", "p"])
         )
-        diversity_province = (
-            counts.group_by("province")
-            .agg(
-                [
-                    (-1 * (pl.col("p") * pl.col("p").log()).sum()).alias("shannon"),
-                    (1 - (pl.col("p") ** 2).sum()).alias("simpson"),
-                ]
+        grouped_province = (
+            counts.group_by("province").agg(pl.col("p").alias("p")).sort("province")
+        )
+        rows_province: list[dict[str, float | str]] = []
+        for row in grouped_province.iter_rows(named=True):
+            probs = [float(value) for value in row["p"] if value is not None]
+            shannon = float(entropy(probs)) if probs else 0.0
+            simpson = 1.0 - sum(value * value for value in probs)
+            rows_province.append(
+                {
+                    "province": row["province"],
+                    "shannon": shannon,
+                    "simpson": simpson,
+                    "effective_names": math.exp(shannon) if probs else 0.0,
+                }
             )
-            .with_columns(pl.col("shannon").exp().alias("effective_names"))
-            .sort("province")
-            .collect()
-        )
+        diversity_province = pl.DataFrame(rows_province)
         output_path = self.target_dir / "diversity_by_province.csv"
         diversity_province.write_csv(output_path)
         return output_path
@@ -369,7 +419,13 @@ class NamesAnalysis:
         frame = self._with_structure(self._base_scan())
         first = (
             frame.group_by("first_token")
-            .agg(pl.len().alias("count"))
+            .agg(
+                [
+                    pl.len().alias("count"),
+                    (pl.col("sex") == "m").sum().alias("m"),
+                    (pl.col("sex") == "f").sum().alias("f"),
+                ]
+            )
             .sort("count", descending=True)
             .collect()
             .head(self.top_n)
@@ -378,13 +434,40 @@ class NamesAnalysis:
 
         last = (
             frame.group_by("last_token")
-            .agg(pl.len().alias("count"))
+            .agg(
+                [
+                    pl.len().alias("count"),
+                    (pl.col("sex") == "m").sum().alias("m"),
+                    (pl.col("sex") == "f").sum().alias("f"),
+                ]
+            )
             .sort("count", descending=True)
             .collect()
             .head(self.top_n)
         )
         output_path = self.target_dir / "last_token_frequency.csv"
         last.write_csv(output_path)
+        for sex, label in (("m", "male"), ("f", "female")):
+            sex_frame = frame.filter(pl.col("sex") == sex)
+            first_sex = (
+                sex_frame.group_by("first_token")
+                .agg(pl.len().alias("count"))
+                .sort("count", descending=True)
+                .collect()
+                .head(self.top_n)
+            )
+            first_sex.write_csv(
+                self.target_dir / f"first_token_frequency_{label}.csv"
+            )
+
+            last_sex = (
+                sex_frame.group_by("last_token")
+                .agg(pl.len().alias("count"))
+                .sort("count", descending=True)
+                .collect()
+                .head(self.top_n)
+            )
+            last_sex.write_csv(self.target_dir / f"last_token_frequency_{label}.csv")
         return output_path
 
     def _export_morphology(self) -> Path:
@@ -415,7 +498,11 @@ class NamesAnalysis:
 
     @staticmethod
     def _letters_only_expr(column: str) -> pl.Expr:
-        return pl.col(column).str.replace_all(r"[^\p{L}]", "")
+        return (
+            pl.col(column)
+            .str.to_lowercase()
+            .str.replace_all(r"[^a-z]", "")
+        )
 
     def _export_letter_frequencies(self) -> Path:
         frame = self._base_scan()
@@ -532,9 +619,31 @@ class NamesAnalysis:
     def _letters_only(value: str | None) -> str:
         if not value:
             return ""
-        return "".join(ch for ch in value if ch.isalpha())
+        normalized = unicodedata.normalize("NFKD", value)
+        return "".join(ch for ch in normalized.lower() if "a" <= ch <= "z")
 
     def _export_regional_distinctiveness(self) -> Path:
+        if os.environ.get(REGION_OVERLAP_ENV) == "1":
+            return self._export_regional_distinctiveness_impl()
+
+        env = os.environ.copy()
+        env[REGION_OVERLAP_ENV] = "1"
+        subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from drc_names_corpus.domain.analysis.names_analysis "
+                    "import NamesAnalysis; NamesAnalysis()."
+                    "_export_regional_distinctiveness()"
+                ),
+            ],
+            check=True,
+            env=env,
+        )
+        return self.target_dir / "region_overlap.csv"
+
+    def _export_regional_distinctiveness_impl(self) -> Path:
         frame = self._with_province(self._with_name_norm(self._base_scan()))
         sets = (
             frame.group_by("province")
@@ -556,7 +665,11 @@ class NamesAnalysis:
                 if not set_a and not set_b:
                     jaccard = 0.0
                 else:
-                    jaccard = len(set_a & set_b) / len(set_a | set_b)
+                    if len(set_a) > len(set_b):
+                        set_a, set_b = set_b, set_a
+                    intersection_count = sum(1 for item in set_a if item in set_b)
+                    union_count = len(set_a) + len(set_b) - intersection_count
+                    jaccard = intersection_count / union_count if union_count else 0.0
                 overlap_rows.append(
                     {
                         "province_a": province_a,
@@ -570,11 +683,13 @@ class NamesAnalysis:
 
     def _export_data_quality(self) -> Path:
         frame = self._base_scan()
-        total_rows = frame.select(pl.len().alias("total")).collect().item()
-        unique_rows = frame.unique().select(pl.len().alias("total")).collect().item()
+        total_rows = _collect_scalar_int(frame.select(pl.len().alias("total")))
+        unique_rows = _collect_scalar_int(
+            frame.unique().select(pl.len().alias("total"))
+        )
         duplicate_rows = total_rows - unique_rows
 
-        normalized_duplicates = (
+        normalized_duplicates = _collect_streaming(
             self._with_name_norm(frame)
             .group_by("name_norm")
             .agg(
@@ -585,21 +700,20 @@ class NamesAnalysis:
             )
             .filter(pl.col("count") > 1)
             .sort("count", descending=True)
-            .collect()
         )
         normalized_duplicates.head(self.top_n).write_csv(
             self.target_dir / "normalized_duplicate_names.csv"
         )
 
-        mismatch_count = (
-            self._with_filename_region(frame)
-            .filter(
-                (pl.col("filename_region").is_not_null())
-                & (pl.col("filename_region") != pl.col("region"))
+        mismatch_count = int(
+            _collect_scalar_int(
+                self._with_filename_region(frame)
+                .filter(
+                    (pl.col("filename_region").is_not_null())
+                    & (pl.col("filename_region") != pl.col("region"))
+                )
+                .select(pl.len().alias("count"))
             )
-            .select(pl.len().alias("count"))
-            .collect()
-            .item()
         )
 
         overview = pl.DataFrame(
@@ -626,7 +740,7 @@ class NamesAnalysis:
                 ),
             ]
         )
-        unusual = (
+        unusual = _collect_streaming(
             flagged.filter(
                 pl.col("is_short") | pl.col("is_long") | pl.col("non_alpha_heavy")
             )
@@ -643,7 +757,6 @@ class NamesAnalysis:
                 ]
             )
             .sort("count", descending=True)
-            .collect()
         )
         output_path = self.target_dir / "unusual_names.csv"
         unusual.write_csv(output_path)
