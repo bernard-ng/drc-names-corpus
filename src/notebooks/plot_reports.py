@@ -8,27 +8,28 @@ import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
 import seaborn as sns
+import scienceplots  # noqa: F401
 from cycler import cycler
 from matplotlib.figure import Figure
 from matplotlib.legend import Legend
 from matplotlib.text import Text
 
 REPORTS_DIR = Path("reports")
-FIGURES_DIR = Path("src/reports/figures")
+FIGURES_DIR = Path("reports/figures")
 PRIMARY_COLOR = "#7a7ffb"
 DARK_COLOR = "#000000"
 SECONDARY_COLOR = "#f8f0fb"
 TERTIARY_COLOR = "#f8f0fb"
 GREEN_COLOR = "#f8f0fb"
+TEXTWIDTH = 3.31314
+ASPECT_RATIO = 6 / 8
+SCALE = 1.0
+FIG_WIDTH = TEXTWIDTH * SCALE
+FIG_HEIGHT = FIG_WIDTH * ASPECT_RATIO
 
 
 def _configure_plotting() -> None:
-    try:
-        import scienceplots  # noqa: F401
-
-        plt.style.use(["science", "ieee", "grid"])
-    except Exception:
-        sns.set_theme(style="whitegrid")
+    plt.style.use(["science", "ieee", "no-latex", "grid"])
     matplotlib.rcParams.update(
         {
             "pgf.texsystem": "xelatex",
@@ -52,6 +53,12 @@ def _configure_plotting() -> None:
 
 def _read_csv(path: Path) -> pl.DataFrame:
     return pl.read_csv(path, null_values=[""])
+
+
+def _new_figure() -> tuple[Figure, matplotlib.axes.Axes]:
+    fig = plt.figure(figsize=(FIG_WIDTH, FIG_HEIGHT))
+    ax = fig.add_subplot(1, 1, 1)
+    return fig, ax
 
 
 def _sanitize_text_for_pgf(fig: Figure) -> list[tuple[Text, str]]:
@@ -103,7 +110,7 @@ def _lineplot(
     logy: bool = False,
 ) -> Figure:
     pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(8, 4.8))
+    fig, ax = _new_figure()
     sns.lineplot(data=pdf, x=x, y=y, marker="o", ax=ax)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -122,7 +129,7 @@ def _barplot(
     rotate: bool = False,
 ) -> Figure:
     pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(8, 4.8))
+    fig, ax = _new_figure()
     sns.barplot(data=pdf, x=x, y=y, ax=ax, color=PRIMARY_COLOR)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -139,7 +146,7 @@ def _heatmap(
     labels: Iterable[str],
     cbar_label: str,
 ) -> Figure:
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = _new_figure()
     sns.heatmap(
         matrix,
         square=True,
@@ -157,7 +164,7 @@ def _heatmap(
 
 
 def _kpi_figure(rows: list[tuple[str, str]]) -> Figure:
-    fig, ax = plt.subplots(figsize=(6.5, 3.5))
+    fig, ax = _new_figure()
     ax.axis("off")
     y = 0.85
     for label, value in rows:
@@ -170,18 +177,14 @@ def _kpi_figure(rows: list[tuple[str, str]]) -> Figure:
 def plot_extraction_analysis() -> None:
     df = _read_csv(REPORTS_DIR / "extraction_analysis" / "extraction_error_rate.csv")
     pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(8, 4.8))
+    fig, ax = _new_figure()
     sns.lineplot(data=pdf, x="year", y="expected", marker="o", ax=ax, label="expected")
-    sns.lineplot(
-        data=pdf, x="year", y="extracted", marker="o", ax=ax, label="extracted"
-    )
+    sns.lineplot(data=pdf, x="year", y="extracted", marker="o", ax=ax, label="extracted")
     ax.set_ylabel("Count")
     ax.set_xlabel("Year")
     ax.set_yscale("log")
     ax2 = ax.twinx()
-    sns.lineplot(
-        data=pdf, x="year", y="error_rate", marker="o", ax=ax2, color=DARK_COLOR
-    )
+    sns.lineplot(data=pdf, x="year", y="error_rate", marker="o", ax=ax2, color=DARK_COLOR)
     ax2.set_ylabel("Error rate (%)")
     ax2.set_ylim(0, max(pdf["error_rate"]) * 1.1)
     legend = ax.legend(fancybox=False, edgecolor=DARK_COLOR)
@@ -190,7 +193,7 @@ def plot_extraction_analysis() -> None:
 
     df = _read_csv(REPORTS_DIR / "extraction_analysis" / "names_by_file.csv")
     pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(7.5, 5))
+    fig, ax = _new_figure()
     sns.scatterplot(
         data=pdf,
         x="total",
@@ -211,7 +214,7 @@ def plot_extraction_analysis() -> None:
 def plot_file_analysis() -> None:
     df = _read_csv(REPORTS_DIR / "file_analysis" / "ablation_report.csv")
     pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(6.5, 5))
+    fig, ax = _new_figure()
     sns.scatterplot(data=pdf, x="gold", y="ablation", ax=ax, color=PRIMARY_COLOR)
     max_val = max(
         cast(float, pdf["gold"].max()),
@@ -225,14 +228,10 @@ def plot_file_analysis() -> None:
     _save(fig, "ablation_scatter")
 
     df = _read_csv(REPORTS_DIR / "file_analysis" / "files_report.csv")
-    df = df.filter(
-        pl.col("gold_lines").is_not_null() & pl.col("sliver_lines").is_not_null()
-    )
+    df = df.filter(pl.col("gold_lines").is_not_null() & pl.col("sliver_lines").is_not_null())
     pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(6.5, 5))
-    sns.scatterplot(
-        data=pdf, x="gold_lines", y="sliver_lines", ax=ax, color=PRIMARY_COLOR
-    )
+    fig, ax = _new_figure()
+    sns.scatterplot(data=pdf, x="gold_lines", y="sliver_lines", ax=ax, color=PRIMARY_COLOR)
     max_val = max(
         cast(float, pdf["gold_lines"].max()),
         cast(float, pdf["sliver_lines"].max()),
@@ -318,11 +317,9 @@ def plot_name_analysis() -> None:
 
     df = _read_csv(REPORTS_DIR / "name_analysis" / "names_by_year.csv")
     pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(8, 4.8))
+    fig, ax = _new_figure()
     pdf = pdf.sort_values("year")
-    ax.stackplot(
-        pdf["year"], pdf["simple"], pdf["complex"], labels=["simple", "complex"]
-    )
+    ax.stackplot(pdf["year"], pdf["simple"], pdf["complex"], labels=["simple", "complex"])
     ax.set_xlabel("Year")
     ax.set_ylabel("Count")
     ax.set_yscale("log")
@@ -331,7 +328,7 @@ def plot_name_analysis() -> None:
 
     df = _read_csv(REPORTS_DIR / "name_analysis" / "names_by_province.csv")
     pdf = df.to_pandas().sort_values("total", ascending=False)
-    fig, ax = plt.subplots(figsize=(9, 4.8))
+    fig, ax = _new_figure()
     ax.bar(pdf["province"], pdf["m"], label="m", color=PRIMARY_COLOR)
     ax.bar(pdf["province"], pdf["f"], bottom=pdf["m"], label="f", color=DARK_COLOR)
     ax.set_xlabel("Province")
@@ -468,9 +465,7 @@ def plot_name_analysis() -> None:
         idx_from = {k: i for i, k in enumerate(from_letters)}
         idx_to = {k: i for i, k in enumerate(to_letters)}
         for row in df.iter_rows(named=True):
-            matrix[idx_from[row["from_letter"]], idx_to[row["to_letter"]]] = row[
-                "probability"
-            ]
+            matrix[idx_from[row["from_letter"]], idx_to[row["to_letter"]]] = row["probability"]
         fig = _heatmap(
             matrix,
             labels=to_letters,
