@@ -334,6 +334,18 @@ def plot_name_analysis() -> None:
     ax.legend(loc="upper left")
     _save(fig, "names_by_year_simple_complex")
 
+    df = _read_csv(REPORTS_DIR / "name_analysis" / "names_by_year.csv")
+    pdf = df.to_pandas().sort_values("year")
+    fig, ax = _new_figure()
+    ax.bar(pdf["year"], pdf["m"], label="m", color=PRIMARY_COLOR)
+    ax.bar(pdf["year"], pdf["f"], bottom=pdf["m"], label="f", color=DARK_COLOR)
+    ax.set_xlabel("Year")
+    ax.set_ylabel("Count")
+    ax.set_yscale("log")
+    legend = ax.legend(fancybox=False, edgecolor=DARK_COLOR, loc="upper left")
+    _style_legend(legend)
+    _save(fig, "names_by_year_gender")
+
     df = _read_csv(REPORTS_DIR / "name_analysis" / "names_by_province.csv")
     pdf = df.to_pandas().sort_values("total", ascending=False)
     fig, ax = _new_figure()
