@@ -172,12 +172,16 @@ def plot_extraction_analysis() -> None:
     pdf = df.to_pandas()
     fig, ax = plt.subplots(figsize=(8, 4.8))
     sns.lineplot(data=pdf, x="year", y="expected", marker="o", ax=ax, label="expected")
-    sns.lineplot(data=pdf, x="year", y="extracted", marker="o", ax=ax, label="extracted")
+    sns.lineplot(
+        data=pdf, x="year", y="extracted", marker="o", ax=ax, label="extracted"
+    )
     ax.set_ylabel("Count")
     ax.set_xlabel("Year")
     ax.set_yscale("log")
     ax2 = ax.twinx()
-    sns.lineplot(data=pdf, x="year", y="error_rate", marker="o", ax=ax2, color=DARK_COLOR)
+    sns.lineplot(
+        data=pdf, x="year", y="error_rate", marker="o", ax=ax2, color=DARK_COLOR
+    )
     ax2.set_ylabel("Error rate (%)")
     ax2.set_ylim(0, max(pdf["error_rate"]) * 1.1)
     legend = ax.legend(fancybox=False, edgecolor=DARK_COLOR)
@@ -221,10 +225,14 @@ def plot_file_analysis() -> None:
     _save(fig, "ablation_scatter")
 
     df = _read_csv(REPORTS_DIR / "file_analysis" / "files_report.csv")
-    df = df.filter(pl.col("gold_lines").is_not_null() & pl.col("sliver_lines").is_not_null())
+    df = df.filter(
+        pl.col("gold_lines").is_not_null() & pl.col("sliver_lines").is_not_null()
+    )
     pdf = df.to_pandas()
     fig, ax = plt.subplots(figsize=(6.5, 5))
-    sns.scatterplot(data=pdf, x="gold_lines", y="sliver_lines", ax=ax, color=PRIMARY_COLOR)
+    sns.scatterplot(
+        data=pdf, x="gold_lines", y="sliver_lines", ax=ax, color=PRIMARY_COLOR
+    )
     max_val = max(
         cast(float, pdf["gold_lines"].max()),
         cast(float, pdf["sliver_lines"].max()),
@@ -312,7 +320,9 @@ def plot_name_analysis() -> None:
     pdf = df.to_pandas()
     fig, ax = plt.subplots(figsize=(8, 4.8))
     pdf = pdf.sort_values("year")
-    ax.stackplot(pdf["year"], pdf["simple"], pdf["complex"], labels=["simple", "complex"])
+    ax.stackplot(
+        pdf["year"], pdf["simple"], pdf["complex"], labels=["simple", "complex"]
+    )
     ax.set_xlabel("Year")
     ax.set_ylabel("Count")
     ax.set_yscale("log")
@@ -458,7 +468,9 @@ def plot_name_analysis() -> None:
         idx_from = {k: i for i, k in enumerate(from_letters)}
         idx_to = {k: i for i, k in enumerate(to_letters)}
         for row in df.iter_rows(named=True):
-            matrix[idx_from[row["from_letter"]], idx_to[row["to_letter"]]] = row["probability"]
+            matrix[idx_from[row["from_letter"]], idx_to[row["to_letter"]]] = row[
+                "probability"
+            ]
         fig = _heatmap(
             matrix,
             labels=to_letters,

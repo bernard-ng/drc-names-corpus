@@ -266,9 +266,7 @@ class NamesAnalysis:
 
     def _export_long_tail(self) -> Path:
         counts = _collect_streaming(
-            self._base_scan()
-            .group_by("name_clean")
-            .agg(pl.len().alias("count"))
+            self._base_scan().group_by("name_clean").agg(pl.len().alias("count"))
         )
         singletons = counts.filter(pl.col("count") == 1).height
         total_unique = counts.height
@@ -456,9 +454,7 @@ class NamesAnalysis:
                 .collect()
                 .head(self.top_n)
             )
-            first_sex.write_csv(
-                self.target_dir / f"first_token_frequency_{label}.csv"
-            )
+            first_sex.write_csv(self.target_dir / f"first_token_frequency_{label}.csv")
 
             last_sex = (
                 sex_frame.group_by("last_token")
@@ -498,11 +494,7 @@ class NamesAnalysis:
 
     @staticmethod
     def _letters_only_expr(column: str) -> pl.Expr:
-        return (
-            pl.col(column)
-            .str.to_lowercase()
-            .str.replace_all(r"[^a-z]", "")
-        )
+        return pl.col(column).str.to_lowercase().str.replace_all(r"[^a-z]", "")
 
     def _export_letter_frequencies(self) -> Path:
         frame = self._base_scan()
