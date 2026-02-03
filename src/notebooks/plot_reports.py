@@ -290,14 +290,22 @@ def plot_name_analysis() -> None:
     df = df.filter(pl.col("char_len").is_not_null()).with_columns(
         pl.col("char_len").cast(pl.Int64)
     )
-    fig = _barplot(
-        df,
-        x="char_len",
-        y="count",
-        xlabel="Characters",
-        ylabel="Frequency",
-        logy=True,
-    )
+    pdf = df.to_pandas()
+    order = sorted(pdf["char_len"].tolist())
+    fig, ax = _new_figure()
+    sns.barplot(data=pdf, x="char_len", y="count", ax=ax, color=PRIMARY_COLOR, order=order)
+    ax.set_xlabel("Characters")
+    ax.set_ylabel("Frequency")
+    ax.set_yscale("log")
+    tick_positions = [
+        idx
+        for idx, value in enumerate(order)
+        if value % 5 == 0 or value == order[-1]
+    ]
+    tick_labels = [str(order[idx]) for idx in tick_positions]
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlim(-0.5, len(order) - 0.5)
     _save(fig, "name_length_distribution")
 
     df = _read_csv(REPORTS_DIR / "name_analysis" / "name_structure_summary.csv")
