@@ -29,7 +29,7 @@ class StatisticsExporter:
         if value is None:
             return 0
         normalized = value.strip().lower()
-        if normalized in {"zéro", "zero", "néant", ""}:
+        if normalized in {"zéro", "zero", "néant", "neant", ""}:
             return 0
         digits = re.sub(r"\D", "", normalized)
         return int(digits) if digits else 0

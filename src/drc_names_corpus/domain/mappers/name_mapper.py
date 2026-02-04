@@ -42,7 +42,12 @@ class NameMapper:
     @staticmethod
     def _entries_repl(match: re.Match[str]) -> str:
         identity = "{:03d}".format(int(match.group("id")))
+        
+        # Preserve leading whitespace before the name
+        name = match.group("name")
+        leading_ws = name[:(len(name) - len(name.lstrip()))]
+
         return (
-            f"{identity} {match.group('name').strip()} {match.group('sex')} "
+            f"{leading_ws}{identity} {name.lstrip()} {match.group('sex')} "
             f"{match.group('percentage')} ==\n"
         )

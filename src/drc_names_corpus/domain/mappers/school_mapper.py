@@ -88,7 +88,7 @@ class SchoolMapper:
         if is_alt:
             passed = self._normalize_zero(match.group("pass"))
             return (
-                f"\n{match.group('name')} "
+                f"\n{match.group('name').strip()} "
                 f"code : {code} "
                 f"participants : {match.group('entries')} "
                 f"dont : {match.group('entries_f')} F "
