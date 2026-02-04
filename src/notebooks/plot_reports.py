@@ -179,9 +179,7 @@ def plot_extraction_analysis() -> None:
     df = _read_csv(REPORTS_DIR / "extraction_analysis" / "extraction_error_rate.csv")
     pdf = df.to_pandas()
     fig, ax = _new_figure()
-    sns.lineplot(
-        data=pdf, x="year", y="pass", marker="o", ax=ax, label="pass"
-    )
+    sns.lineplot(data=pdf, x="year", y="pass", marker="o", ax=ax, label="pass")
     sns.lineplot(
         data=pdf, x="year", y="extracted", marker="o", ax=ax, label="extracted"
     )
@@ -189,11 +187,9 @@ def plot_extraction_analysis() -> None:
     ax.set_xlabel("Year")
     ax.set_yscale("log")
     ax2 = ax.twinx()
-    sns.lineplot(
-        data=pdf, x="year", y="missing", marker="o", ax=ax2, color=DARK_COLOR
-    )
+    sns.lineplot(data=pdf, x="year", y="missing", marker="o", ax=ax2, color=DARK_COLOR)
     ax2.set_ylabel("Missing (%)")
-    max_missing = float(pdf["missing"].max()) if "missing" in pdf else 0.0
+    max_missing = cast(float, pdf["missing"].max()) if "missing" in pdf else 0.0
     ax2.set_ylim(0, max_missing * 1.1 if max_missing > 0 else 1.0)
     legend = ax.legend(fancybox=False, edgecolor=DARK_COLOR)
     _style_legend(legend)
