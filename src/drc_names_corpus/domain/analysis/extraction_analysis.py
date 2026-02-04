@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExtractionAnalysis:
-    """Compute extraction error rate between expected and extracted counts."""
+    """Compute extraction error rate between pass counts and extracted counts."""
 
     def __init__(self) -> None:
         self.names_path = get_dataset_path("gold", "names.csv")
@@ -43,25 +43,35 @@ class ExtractionAnalysis:
             pl.col("year").is_not_null()
         )
 
-        expected = statistics.group_by("year").agg(
-            pl.col("entries").cast(pl.Int64).sum().alias("expected")
+        per_year = statistics.group_by("year").agg(
+            [
+                pl.col("entries").cast(pl.Int64, strict=False).sum().alias("entries"),
+                pl.col("pass").cast(pl.Int64, strict=False).sum().alias("pass"),
+            ]
         )
         extracted = names.group_by("year").agg(
             pl.len().cast(pl.Int64).alias("extracted")
         )
 
-        report = expected.join(extracted, on="year", how="outer").with_columns(
+        report = per_year.join(extracted, on="year", how="inner").with_columns(
             [
-                pl.col("expected").fill_null(0),
+                pl.col("entries").fill_null(0),
+                pl.col("pass").fill_null(0),
                 pl.col("extracted").fill_null(0),
             ]
         )
         report = report.with_columns(
-            pl.when(pl.col("expected") > 0)
-            .then((pl.col("expected") - pl.col("extracted")) / pl.col("expected") * 100)
+            pl.when(pl.col("pass") > 0)
+            .then(
+                (pl.col("pass") - pl.col("extracted"))
+                / pl.col("pass")
+                * 100
+            )
             .otherwise(None)
-            .alias("error_rate")
-        ).select(["year", "expected", "extracted", "error_rate"])
+            .alias("missing")
+        ).with_columns(pl.col("missing").round(4)).select(
+            ["year", "entries", "pass", "extracted", "missing"]
+        )
 
         output_path = self.target_dir / "extraction_error_rate.csv"
         report.sort("year").write_csv(output_path)

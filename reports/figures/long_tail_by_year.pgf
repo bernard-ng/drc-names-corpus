@@ -2406,7 +2406,7 @@
 \pgfpathlineto{\pgfqpoint{1.144870in}{2.154125in}}%
 \pgfpathlineto{\pgfqpoint{1.300418in}{2.176445in}}%
 \pgfpathlineto{\pgfqpoint{1.455966in}{2.175450in}}%
-\pgfpathlineto{\pgfqpoint{1.611514in}{0.443845in}}%
+\pgfpathlineto{\pgfqpoint{1.611514in}{0.443855in}}%
 \pgfpathlineto{\pgfqpoint{1.767062in}{2.175888in}}%
 \pgfpathlineto{\pgfqpoint{1.922610in}{2.176261in}}%
 \pgfpathlineto{\pgfqpoint{2.078158in}{2.174840in}}%
@@ -2471,7 +2471,7 @@
 \pgfsys@useobject{currentmarker}{}%
 \end{pgfscope}%
 \begin{pgfscope}%
-\pgfsys@transformshift{1.611514in}{0.443845in}%
+\pgfsys@transformshift{1.611514in}{0.443855in}%
 \pgfsys@useobject{currentmarker}{}%
 \end{pgfscope}%
 \begin{pgfscope}%

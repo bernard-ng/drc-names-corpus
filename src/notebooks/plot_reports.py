@@ -10,6 +10,7 @@ import polars as pl
 import seaborn as sns
 import scienceplots  # noqa: F401
 from cycler import cycler
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.legend import Legend
 from matplotlib.text import Text
@@ -55,7 +56,7 @@ def _read_csv(path: Path) -> pl.DataFrame:
     return pl.read_csv(path, null_values=[""])
 
 
-def _new_figure() -> tuple[Figure, matplotlib.axes.Axes]:
+def _new_figure() -> tuple[Figure, Axes]:
     fig = plt.figure(figsize=(FIG_WIDTH, FIG_HEIGHT))
     ax = fig.add_subplot(1, 1, 1)
     return fig, ax
@@ -178,15 +179,22 @@ def plot_extraction_analysis() -> None:
     df = _read_csv(REPORTS_DIR / "extraction_analysis" / "extraction_error_rate.csv")
     pdf = df.to_pandas()
     fig, ax = _new_figure()
-    sns.lineplot(data=pdf, x="year", y="expected", marker="o", ax=ax, label="expected")
-    sns.lineplot(data=pdf, x="year", y="extracted", marker="o", ax=ax, label="extracted")
+    sns.lineplot(
+        data=pdf, x="year", y="pass", marker="o", ax=ax, label="pass"
+    )
+    sns.lineplot(
+        data=pdf, x="year", y="extracted", marker="o", ax=ax, label="extracted"
+    )
     ax.set_ylabel("Count")
     ax.set_xlabel("Year")
     ax.set_yscale("log")
     ax2 = ax.twinx()
-    sns.lineplot(data=pdf, x="year", y="error_rate", marker="o", ax=ax2, color=DARK_COLOR)
-    ax2.set_ylabel("Error rate (%)")
-    ax2.set_ylim(0, max(pdf["error_rate"]) * 1.1)
+    sns.lineplot(
+        data=pdf, x="year", y="missing", marker="o", ax=ax2, color=DARK_COLOR
+    )
+    ax2.set_ylabel("Missing (%)")
+    max_missing = float(pdf["missing"].max()) if "missing" in pdf else 0.0
+    ax2.set_ylim(0, max_missing * 1.1 if max_missing > 0 else 1.0)
     legend = ax.legend(fancybox=False, edgecolor=DARK_COLOR)
     _style_legend(legend)
     _save(fig, "extraction_error_rate")
@@ -228,10 +236,14 @@ def plot_file_analysis() -> None:
     _save(fig, "ablation_scatter")
 
     df = _read_csv(REPORTS_DIR / "file_analysis" / "files_report.csv")
-    df = df.filter(pl.col("gold_lines").is_not_null() & pl.col("sliver_lines").is_not_null())
+    df = df.filter(
+        pl.col("gold_lines").is_not_null() & pl.col("sliver_lines").is_not_null()
+    )
     pdf = df.to_pandas()
     fig, ax = _new_figure()
-    sns.scatterplot(data=pdf, x="gold_lines", y="sliver_lines", ax=ax, color=PRIMARY_COLOR)
+    sns.scatterplot(
+        data=pdf, x="gold_lines", y="sliver_lines", ax=ax, color=PRIMARY_COLOR
+    )
     max_val = max(
         cast(float, pdf["gold_lines"].max()),
         cast(float, pdf["sliver_lines"].max()),
@@ -293,14 +305,14 @@ def plot_name_analysis() -> None:
     pdf = df.to_pandas()
     order = sorted(pdf["char_len"].tolist())
     fig, ax = _new_figure()
-    sns.barplot(data=pdf, x="char_len", y="count", ax=ax, color=PRIMARY_COLOR, order=order)
+    sns.barplot(
+        data=pdf, x="char_len", y="count", ax=ax, color=PRIMARY_COLOR, order=order
+    )
     ax.set_xlabel("Characters")
     ax.set_ylabel("Frequency")
     ax.set_yscale("log")
     tick_positions = [
-        idx
-        for idx, value in enumerate(order)
-        if value % 5 == 0 or value == order[-1]
+        idx for idx, value in enumerate(order) if value % 5 == 0 or value == order[-1]
     ]
     tick_labels = [str(order[idx]) for idx in tick_positions]
     ax.set_xticks(tick_positions)
@@ -327,7 +339,9 @@ def plot_name_analysis() -> None:
     pdf = df.to_pandas()
     fig, ax = _new_figure()
     pdf = pdf.sort_values("year")
-    ax.stackplot(pdf["year"], pdf["simple"], pdf["complex"], labels=["simple", "complex"])
+    ax.stackplot(
+        pdf["year"], pdf["simple"], pdf["complex"], labels=["simple", "complex"]
+    )
     ax.set_xlabel("Year")
     ax.set_ylabel("Count")
     ax.set_yscale("log")
@@ -485,7 +499,9 @@ def plot_name_analysis() -> None:
         idx_from = {k: i for i, k in enumerate(from_letters)}
         idx_to = {k: i for i, k in enumerate(to_letters)}
         for row in df.iter_rows(named=True):
-            matrix[idx_from[row["from_letter"]], idx_to[row["to_letter"]]] = row["probability"]
+            matrix[idx_from[row["from_letter"]], idx_to[row["to_letter"]]] = row[
+                "probability"
+            ]
         fig = _heatmap(
             matrix,
             labels=to_letters,

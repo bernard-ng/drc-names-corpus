@@ -43,10 +43,14 @@ class TextFormatter:
     def format_text(self, text: str, filename: str) -> str:
         text = self._normalize_spacing(text)
         text = self.metadata_mapper.strip_metadata(text, filename)
+
+        if self.metadata_mapper.is_year(filename, 2023):
+            text = self.school_mapper.format_schools(text, is_alt=True)
+        else:
+            text = self.school_mapper.format_schools(text, is_alt=False)
+
         text = self.name_mapper.format_entries(text)
-        text = self.school_mapper.format_schools(
-            text, is_alt=self.metadata_mapper.is_year(filename, 2023)
-        )
+
         return self._canonize_text(text)
 
     def format_file(self, source_path: Path, target_path: Path | None = None) -> bool:
