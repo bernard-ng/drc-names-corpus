@@ -60,17 +60,15 @@ class ExtractionAnalysis:
                 pl.col("extracted").fill_null(0),
             ]
         )
-        report = report.with_columns(
-            pl.when(pl.col("pass") > 0)
-            .then(
-                (pl.col("pass") - pl.col("extracted"))
-                / pl.col("pass")
-                * 100
+        report = (
+            report.with_columns(
+                pl.when(pl.col("pass") > 0)
+                .then((pl.col("pass") - pl.col("extracted")) / pl.col("pass") * 100)
+                .otherwise(None)
+                .alias("missing")
             )
-            .otherwise(None)
-            .alias("missing")
-        ).with_columns(pl.col("missing").round(4)).select(
-            ["year", "entries", "pass", "extracted", "missing"]
+            .with_columns(pl.col("missing").round(4))
+            .select(["year", "entries", "pass", "extracted", "missing"])
         )
 
         output_path = self.target_dir / "extraction_error_rate.csv"
