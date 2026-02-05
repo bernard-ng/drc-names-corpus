@@ -1,7 +1,7 @@
 [project]
 name = "drc-names-corpus"
 version = "1.0.0"
-description = "The CongoNames Corpus: A Large-Scale Dataset of Congolese Personal Names with Gender and Ethnic Annotations"
+description = "The CongoNames Corpus: A Large-Scale Labeled Dataset of Congolese Personal Names"
 readme = "README.md"
 authors = [
     { name = "bernard-ng", email = "ngandubernard@gmail.com" }
